@@ -1,0 +1,22 @@
+# ---- Web framework ----
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# ---- Settings & validation ----
+pydantic==2.9.2
+pydantic-settings==2.5.2
+email-validator==2.2.0
+
+# ---- Database / ORM / migrations ----
+SQLAlchemy==2.0.35
+psycopg2-binary==2.9.9
+alembic==1.13.2
+
+# ---- Auth / security ----
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.9
+
+# ---- Environment ----
+python-dotenv==1.0.1

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="application-name" content="BuildResume">
+<meta name="description" content="BuildResume - Build your professional resume in minutes with AI assistance.">
+<title>BuildResume - AI Resume Builder</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== Top Header ===== -->
+  <header class="app-header">
+  <div class="navbar">
+    <div class="navbar-brand" id="navbarBrand">
+      <!-- Brand component: logo + wordmark. Rendered here statically;
+           JS renderBrand() can also inject this anywhere else. -->
+    </div>
+    <nav class="navbar-nav" id="navbarNav">
+      <a href="#" class="nav-link active" data-page="home">Home</a>
+      <a href="#" class="nav-link" data-page="builder">Builder</a>
+      <a href="#" class="nav-link" data-page="templates">Templates</a>
+      <a href="#" class="nav-link" data-page="profile">Profile</a>
+      <a href="#" class="nav-link nav-logout" id="logoutBtn">Logout</a>
+    </nav>
+    <button class="navbar-hamburger" id="hamburgerBtn" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+  <!-- ===== Main Layout: 3 Columns ===== -->
+  <!-- ===================== PAGE: HOME ===================== -->
+<div class="page" id="page-home">
+  <div class="page-content">
+
+    <div class="dashboard-hero">
+      <div>
+        <h2 class="page-heading">My Resumes</h2>
+        <p class="page-subheading">Welcome to BuildResume. Manage and create your professional resumes.</p>
+      </div>
+      <button class="btn-primary" onclick="initiateNewResume()">+ Create New Resume</button>
+    </div>
+
+    <div class="resume-grid" id="resumeGrid">
+      <!-- Mock resume cards injected by JS -->
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== PAGE: BUILDER ===================== -->
+<div class="page page-builder" id="page-builder" style="display:none;">
+  <!-- Builder Toolbar -->
+  <div class="builder-toolbar">
+    <div class="builder-toolbar-left">
+      <div class="resume-name-display">
+      <span id="resumeNameText">Untitled Resume</span>
+      <button class="name-edit-btn" onclick="editResumeName()" title="Rename resume">✎</button>
+    </div>
+    <div class="toolbar-history-btns">
+      <button class="history-btn" id="undoBtn" onclick="undoChange()"
+        title="Undo (Ctrl+Z)" disabled>&#10554;</button>
+      <button class="history-btn" id="redoBtn" onclick="redoChange()"
+        title="Redo (Ctrl+Y)" disabled>&#10555;</button>
+    </div>
+    <span class="save-status" id="saveStatus"></span>
+    </div>
+    <div class="builder-toolbar-right">
+      <span class="last-saved-text" id="lastSaved"></span>
+      <button class="toolbar-btn" onclick="saveCurrentResume()">💾 Save</button>
+      <button class="toolbar-btn toolbar-btn--outline" id="formatBtn" onclick="openFormatDrawer()">🎨 Format</button>
+      <div class="export-menu-wrap" id="exportMenuWrap">
+        <button class="toolbar-btn toolbar-btn--outline" id="exportMenuBtn"
+          onclick="toggleExportMenu(event)">📄 Download PDF ▾</button>
+        <div class="export-menu" id="exportMenu" style="display:none;">
+          <button class="export-menu-item" onclick="downloadPDF()">⬇️ Download as PDF</button>
+          <button class="export-menu-item" onclick="printResume()">🖨️ Print Resume</button>
+          <div class="export-menu-divider"></div>
+          <button class="export-menu-item export-menu-item--disabled" onclick="exportDocxPlaceholder()">📝 Export DOCX (Coming Soon)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<main class="app-layout" id="appLayout">
+
+    <!-- ===================== LEFT: RESUME FORM ===================== -->
+    <section class="panel form-panel" data-panel="form">
+      <div class="panel-header">
+        <span class="panel-title">Resume Form</span>
+        <div class="panel-controls">
+          <button class="panel-btn collapse-btn" title="Collapse">−</button>
+          <button class="panel-btn fullscreen-btn" title="Full Screen">▢</button>
+        </div>
+      </div>
+      <div class="panel-body">
+
+        <!-- Form top bar: section manager toggle -->
+        <div class="form-top-bar">
+          <button id="sectionManagerBtn" class="section-mgr-btn" onclick="toggleSectionManager()">
+            ☰ Manage Sections
+          </button>
+        </div>
+
+        <!-- Section Manager Panel (slides in/out) -->
+        <div class="section-manager" id="sectionManager" style="display:none;">
+          <div class="section-manager-header">
+            <span class="sm-title">Resume Sections</span>
+            <button class="sm-close-btn" onclick="toggleSectionManager()">✕</button>
+          </div>
+          <p class="sm-hint">Check a section to add it to your resume.</p>
+          <div id="sectionManagerList"></div>
+        </div>
+
+        <!-- Resume Completeness Indicator -->
+        <div class="completeness-bar" id="completenessBar" style="display:none;">
+          <div class="completeness-header">
+            <span class="completeness-label">Resume Completeness</span>
+            <span class="completeness-score" id="completenessScore">0%</span>
+          </div>
+          <div class="completeness-track">
+            <div class="completeness-fill" id="completenessFill"></div>
+          </div>
+          <div class="completeness-tips" id="completenessTips"></div>
+        </div>
+
+        <!-- Dynamic form sections — all rendered by JS -->
+        <div id="formSections"></div>
+
+      </div>
+    </section>
+
+    <div class="divider" id="dividerLeft"></div>
+
+    <!-- ===================== CENTER: RESUME PREVIEW ===================== -->
+    <section class="panel preview-panel" data-panel="preview">
+      <div class="panel-header">
+        <span class="panel-title">Resume Preview</span>
+        <div class="panel-controls">
+          <select class="tpl-switcher" id="builderTemplateSwitcher" title="Switch template"></select>
+          <button class="panel-btn fullscreen-btn" title="Full Screen">▢</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="page-indicator-bar" id="pageIndicatorBar" style="display:none;">
+          <span class="page-indicator-text" id="pageIndicatorText"></span>
+        </div>
+        <div id="resumePreview" class="resume-paper"></div>
+      </div>
+    </section>
+
+    <div class="divider" id="dividerRight"></div>
+
+    <!-- ===================== RIGHT: AI ASSISTANT PANEL ===================== -->
+    <section class="panel ai-panel" data-panel="ai">
+      <div class="panel-header">
+        <span class="panel-title">AI Assistant</span>
+        <div class="panel-controls">
+          <button class="panel-btn collapse-btn" title="Collapse">−</button>
+          <button class="panel-btn fullscreen-btn" title="Full Screen">▢</button>
+        </div>
+      </div>
+      <div class="panel-body">
+      <p class="ai-note">AI features will be connected later. This is just the UI for now.</p>
+
+      <div class="ai-chat" id="aiChat">
+        <div class="ai-message">
+          👋 Hi! I'll help you improve your resume soon. Stay tuned!
+        </div>
+      </div>
+
+      <div class="ai-input-row">
+        <input type="text" id="aiInput" placeholder="Ask AI for help...">
+        <button type="button" onclick="sendAIMessage()">Send</button>
+      </div>
+    </div>
+    </section>
+
+  </main>
+
+<!-- ===================== FLOATING SELECTION TOOLBAR ===================== -->
+<div class="float-toolbar" id="selectionToolbar">
+  <!-- Format buttons -->
+  <button class="ft-btn ft-bold"   id="ftBold"   title="Bold (Ctrl+B)"
+    onmousedown="event.preventDefault()" onclick="fmtCmd('bold')"><b>B</b></button>
+  <button class="ft-btn ft-italic" id="ftItalic" title="Italic (Ctrl+I)"
+    onmousedown="event.preventDefault()" onclick="fmtCmd('italic')"><i>I</i></button>
+  <button class="ft-btn ft-under"  id="ftUnder"  title="Underline (Ctrl+U)"
+    onmousedown="event.preventDefault()" onclick="fmtCmd('underline')"><u>U</u></button>
+  <button class="ft-btn ft-strike" id="ftStrike" title="Strikethrough"
+    onmousedown="event.preventDefault()" onclick="fmtCmd('strikeThrough')"><s>S</s></button>
+
+  <div class="ft-divider"></div>
+
+  <!-- Font size -->
+  <select class="ft-select" id="ftFontSize" title="Font size"
+    onmousedown="event.stopPropagation()"
+    onchange="fmtFontSize(this.value)">
+    <option value="">Size</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+    <option value="11">11</option>
+    <option value="12">12</option>
+    <option value="13">13</option>
+    <option value="14">14</option>
+    <option value="16">16</option>
+    <option value="18">18</option>
+    <option value="20">20</option>
+    <option value="24">24</option>
+    <option value="28">28</option>
+  </select>
+
+  <div class="ft-divider"></div>
+
+  <!-- Text color -->
+  <div class="ft-color-wrap" title="Text color" onmousedown="saveSelectionRange()">
+    <div class="ft-color-indicator" id="ftColorDot" style="background:#111111;"></div>
+    <input type="color" class="ft-color-input" id="ftColorInput"
+      onmousedown="event.stopPropagation()"
+      oninput="fmtColor('foreColor', this.value)"
+      onchange="fmtColor('foreColor', this.value)">
+  </div>
+
+  <!-- Highlight color -->
+  <div class="ft-color-wrap" title="Highlight color" onmousedown="saveSelectionRange()">
+    <div class="ft-color-indicator" id="ftHiDot"
+      style="background:#ffff00; border:1px dashed #999;"></div>
+    <input type="color" class="ft-color-input" id="ftHiInput"
+      value="#ffff00"
+      onmousedown="event.stopPropagation()"
+      oninput="fmtColor('hiliteColor', this.value)"
+      onchange="fmtColor('hiliteColor', this.value)">
+  </div>
+
+  <div class="ft-divider"></div>
+
+  <!-- Quick color swatches -->
+  <div class="ft-swatches">
+    <div class="ft-swatch" style="background:#111111;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#111111')" title="Black"></div>
+    <div class="ft-swatch" style="background:#2563eb;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#2563eb')" title="Blue"></div>
+    <div class="ft-swatch" style="background:#dc2626;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#dc2626')" title="Red"></div>
+    <div class="ft-swatch" style="background:#16a34a;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#16a34a')" title="Green"></div>
+    <div class="ft-swatch" style="background:#9333ea;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#9333ea')" title="Purple"></div>
+    <div class="ft-swatch" style="background:#b45309;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#b45309')" title="Brown"></div>
+    <div class="ft-swatch" style="background:#ffffff; border:1px solid #ccc;" onmousedown="event.preventDefault()"
+      onclick="fmtColor('foreColor','#ffffff')" title="White"></div>
+  </div>
+
+  <div class="ft-divider"></div>
+
+  <!-- Line height for selected block -->
+  <select class="ft-select" id="ftLineH" title="Paragraph line spacing"
+    onmousedown="event.stopPropagation()"
+    onchange="fmtLineHeight(this.value)">
+    <option value="">Lead</option>
+    <option value="0.5">0.5</option>
+    <option value="0.75">0.75</option>
+    <option value="1.0">1.0</option>
+    <option value="1.15">1.15</option>
+    <option value="1.25">1.25</option>
+    <option value="1.5">1.5</option>
+    <option value="1.75">1.75</option>
+    <option value="2.0">2.0</option>
+  </select>
+
+  <!-- Letter spacing -->
+  <select class="ft-select" id="ftLetterSp" title="Letter spacing"
+    onmousedown="event.stopPropagation()"
+    onchange="fmtLetterSpacing(this.value)">
+    <option value="">Tracking</option>
+    <option value="-0.5px">Tight −</option>
+    <option value="0px">Normal</option>
+    <option value="0.5px">Wide +</option>
+    <option value="1px">Wider ++</option>
+    <option value="2px">Widest</option>
+    <option value="1px">Open 1px</option>
+    <option value="2.5px">Open 2.5px</option>
+  </select>
+
+  <div class="ft-divider"></div>
+
+  <!-- Clear formatting -->
+  <button class="ft-btn ft-clear" title="Clear all formatting"
+    onmousedown="event.preventDefault()" onclick="fmtClear()">✕</button>
+</div>
+
+  <!-- ===================== FORMAT DRAWER ===================== -->
+<div class="format-overlay" id="formatOverlay" onclick="closeFormatDrawer()"></div>
+<div class="format-drawer" id="formatDrawer">
+  <div class="format-drawer-header">
+    <span class="format-drawer-title">🎨 Resume Formatting</span>
+    <button class="format-drawer-close" onclick="closeFormatDrawer()">✕</button>
+  </div>
+  <div class="format-drawer-body" id="formatDrawerBody">
+    <!-- Populated by renderFormatDrawer() -->
+  </div>
+</div>
+
+</div><!-- end page-builder -->
+
+<!-- ===================== PAGE: TEMPLATES ===================== -->
+<div class="page" id="page-templates" style="display:none;">
+  <div class="page-content">
+    <h2 class="page-heading">Resume Templates</h2>
+    <p class="page-subheading">Choose a template that fits your style.</p>
+
+    <div class="template-section">
+      <h3 class="template-section-title">ATS Friendly</h3>
+      <div class="template-grid" id="atsGrid"></div>
+    </div>
+
+    <div class="template-section">
+      <h3 class="template-section-title">Modern</h3>
+      <div class="template-grid" id="modernGrid"></div>
+    </div>
+
+    <div class="template-section">
+      <h3 class="template-section-title">Professional</h3>
+      <div class="template-grid" id="professionalGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PAGE: PROFILE ===================== -->
+<div class="page" id="page-profile" style="display:none;">
+  <div class="page-content page-content--narrow">
+    <h2 class="page-heading">My Profile</h2>
+    <p class="page-subheading">Manage your personal information.</p>
+
+    <div class="profile-card">
+      <div class="profile-avatar">KS</div>
+      <div class="profile-sections">
+
+        <div class="profile-section">
+          <h3 class="profile-section-title">Personal Information</h3>
+          <div class="profile-grid">
+            <div class="profile-field">
+              <label>Full Name</label>
+              <input type="text" value="Krishna Singhal" />
+            </div>
+            <div class="profile-field">
+              <label>Email</label>
+              <input type="email" value="krishna@example.com" />
+            </div>
+            <div class="profile-field">
+              <label>Phone Number</label>
+              <input type="text" value="+91 9876543210" />
+            </div>
+            <div class="profile-field">
+              <label>Date of Birth</label>
+              <input type="date" value="2003-01-15" />
+            </div>
+            <div class="profile-field">
+              <label>Gender</label>
+              <select>
+                <option>Male</option>
+                <option>Female</option>
+                <option>Non-binary</option>
+                <option>Prefer not to say</option>
+              </select>
+            </div>
+            <div class="profile-field">
+              <label>Country</label>
+              <input type="text" value="India" />
+            </div>
+            <div class="profile-field">
+              <label>City</label>
+              <input type="text" value="Noida" />
+            </div>
+            <div class="profile-field profile-field--full">
+              <label>Address</label>
+              <input type="text" value="Sector 62, Noida, Uttar Pradesh" />
+            </div>
+          </div>
+          <button class="btn-primary" style="margin-top:16px;">Save Changes</button>
+        </div>
+
+        <div class="profile-section">
+          <h3 class="profile-section-title">Password</h3>
+          <div class="profile-field">
+            <label>Current Password</label>
+            <div class="password-row">
+              <input type="password" value="placeholder" disabled />
+              <button class="btn-secondary" onclick="alert('Password change coming soon.')">Change Password</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== NEW / RENAME RESUME MODAL ===================== -->
+<div class="modal-overlay" id="newResumeModal">
+  <div class="modal">
+    <div class="modal-icon">📄</div>
+    <h3 class="modal-title" id="newResumeModalTitle">Name Your Resume</h3>
+    <p class="modal-body">Give your resume a clear name so you can find it easily later.</p>
+    <div class="profile-field" style="margin-bottom:20px; text-align:left;">
+      <label>Resume Name <span style="color:#ef4444;">*</span></label>
+      <input type="text" id="newResumeNameInput"
+             placeholder="e.g. Software Engineer Resume"
+             onkeydown="if(event.key==='Enter') confirmResumeNameAction()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeNewResumeModal()">Cancel</button>
+      <button class="btn-primary" id="confirmResumeBtn" onclick="confirmResumeNameAction()">
+        Create Resume
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== LOGOUT MODAL ===================== -->
+<div class="modal-overlay" id="logoutModal">
+  <div class="modal">
+    <div class="modal-icon">👋</div>
+    <h3 class="modal-title">Confirm Logout</h3>
+    <p class="modal-body">Are you sure you want to log out of BuildResume?</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="cancelLogout">Cancel</button>
+      <button class="btn-danger" id="confirmLogout">Logout</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
