@@ -6,6 +6,14 @@ Pydantic schemas for Resume read/create/update payloads.
 the frontend's data structures are still evolving (see
 docs/project_context.md) and the backend's job in this phase is to
 store and return them verbatim, not to validate their internal shape.
+
+The `full_name`/`email`/`phone`/.../`certifications` fields on
+ResumeRead are DENORMALIZED, read-only copies of specific sub-fields
+extracted out of `resume_data` -- see app/models/resume.py's module
+docstring and ResumeService._extract_denormalized_fields(). They are
+deliberately absent from ResumeCreate/ResumeUpdate: clients write
+`resume_data`, never these derived fields directly, so there's only
+ever one source of truth to keep consistent.
 """
 
 import uuid
@@ -60,3 +68,18 @@ class ResumeRead(ResumeBase):
     user_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+
+    # ---- Denormalized copies (read-only, derived from resume_data) ----
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    summary: Optional[str] = None
+    skills: Optional[Any] = None
+    education: Optional[Any] = None
+    experience: Optional[Any] = None
+    projects: Optional[Any] = None
+    certifications: Optional[Any] = None

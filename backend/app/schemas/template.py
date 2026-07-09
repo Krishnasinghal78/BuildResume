@@ -21,6 +21,8 @@ class TemplateRead(BaseModel):
     id: uuid.UUID
     name: str
     category: str
+    description: Optional[str] = None
     preview_image: Optional[str] = None
+    html_template_path: Optional[str] = None
     is_active: bool
     created_at: datetime

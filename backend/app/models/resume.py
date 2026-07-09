@@ -8,6 +8,15 @@ as PostgreSQL JSONB, which -- unlike plain JSON -- is stored in a
 decomposed binary format that supports indexing and containment
 queries, at a small write-time parsing cost. Since resumes are read
 far more often than written, JSONB is the right choice here.
+
+`resume_data`/`formatting_data` remain the single source of truth.
+The flat columns below (full_name, email, skills, education, ...)
+are DENORMALIZED, read-only copies of specific sub-fields extracted
+out of `resume_data` by ResumeService on every create/update -- they
+exist purely so simple, fast SQL queries (e.g. "find resumes by
+full_name" or "filter by email" without a JSONB containment query)
+don't need to reach into the blob. They are never written to
+directly by the API; see ResumeService._extract_denormalized_fields().
 """
 
 from __future__ import annotations
@@ -16,7 +25,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -62,6 +71,7 @@ class Resume(Base):
         doc='User-facing resume name, e.g. "Krishna Singhal (Copy)".',
     )
 
+    # ---- Authoritative content (source of truth) ----
     resume_data: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
@@ -75,6 +85,22 @@ class Resume(Base):
         default=dict,
         doc="The frontend's inline formatting metadata object, stored verbatim.",
     )
+
+    # ---- Denormalized copies, derived from resume_data (see module docstring) ----
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    linkedin_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    github_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    portfolio_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    skills: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    education: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    experience: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    projects: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    certifications: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
