@@ -3,7 +3,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
 # ---- Settings & validation ----
-pydantic==2.9.2
+pydantic==2.12.5
 pydantic-settings==2.5.2
 email-validator==2.2.0
 
@@ -24,3 +24,9 @@ python-dotenv==1.0.1
 # ---- PDF export (Phase 3) ----
 Jinja2==3.1.4
 weasyprint==69.0
+
+# ---- AI (Phase 4) ----
+# Google's current GA SDK for the Gemini API. The older
+# "google-generativeai" package is legacy/unmaintained per Google's
+# own docs -- this is the recommended replacement.
+google-genai==2.23.0
