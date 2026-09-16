@@ -45,6 +45,7 @@ from app.services.auth_service import (
     UsernameAlreadyTakenError,
     UserNotFoundError,
 )
+from app.services.email_service import EmailDeliveryError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -72,6 +73,8 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> MessageRespo
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except UsernameAlreadyTakenError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     return MessageResponse(message="OTP sent to your email. Verify it to complete registration.")
 
@@ -121,6 +124,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> MessageRespon
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except EmailNotVerifiedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     return MessageResponse(message="OTP sent to your email. Verify it to continue.")
 

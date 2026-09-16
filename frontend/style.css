@@ -950,6 +950,144 @@ textarea {
   align-items: center;
 }
 
+/* ============ Auth pages: Login / Register / OTP Verify ============ */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+
+  /* Slow-shifting gradient -- subtle, professional (deep slate/blue),
+     not a saturated/neon "gaming" palette. */
+  background: linear-gradient(120deg, #eef2ff, #f8fafc, #e0e7ff, #f1f5f9);
+  background-size: 300% 300%;
+  animation: authGradientShift 18s ease infinite;
+}
+
+@keyframes authGradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Floating decor (resume icons + particles) sits behind the card,
+   fixed to the viewport so it doesn't reflow/scroll with content.
+   Purely decorative: aria-hidden, no pointer events. */
+#authBackgroundDecor {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  display: none; /* toggled on/off in script.js alongside auth-page visibility */
+}
+
+.auth-decor-icon {
+  position: absolute;
+  opacity: 0.10;
+  color: #2563eb;
+  animation-name: authFloatDrift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.auth-decor-icon svg { width: 100%; height: 100%; display: block; }
+
+@keyframes authFloatDrift {
+  0%   { transform: translateY(0px) rotate(0deg); }
+  50%  { transform: translateY(-26px) rotate(4deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.auth-decor-particle {
+  position: absolute;
+  border-radius: 50%;
+  background: #2563eb;
+  opacity: 0.12;
+  animation-name: authParticleFloat;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes authParticleFloat {
+  0%   { transform: translateY(0px) scale(1);   opacity: 0.10; }
+  50%  { transform: translateY(-60px) scale(1.15); opacity: 0.22; }
+  100% { transform: translateY(0px) scale(1);   opacity: 0.10; }
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+
+  /* Glassmorphism: translucent + blurred, with a soft highlight
+     border -- still reads as a clean, professional card, not a
+     flashy/gamer surface. */
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  padding: 36px 32px;
+  box-shadow: 0 8px 32px rgba(30, 41, 59, 0.12);
+}
+
+.auth-logo {
+  font-size: 18px;
+  font-weight: 800;
+  color: #2563eb;
+  margin-bottom: 18px;
+}
+
+.auth-card .page-heading { margin-bottom: 4px; }
+.auth-card .page-subheading { margin-bottom: 24px; color: #64748b; font-size: 14px; }
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-submit-btn {
+  margin-top: 8px;
+  width: 100%;
+  text-align: center;
+  padding: 11px;
+  font-size: 15px;
+}
+
+.auth-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-switch-line {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13.5px;
+  color: #64748b;
+}
+
+/* Respect users who've asked for reduced motion -- freeze all decor
+   and the gradient shift rather than force animation on everyone. */
+@media (prefers-reduced-motion: reduce) {
+  .auth-page { animation: none; }
+  .auth-decor-icon, .auth-decor-particle { animation: none; }
+}
+
+.auth-switch-line a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-switch-line a:hover { text-decoration: underline; }
+
 .password-row input {
   flex: 1;
   padding: 9px 12px;
@@ -1775,6 +1913,11 @@ textarea {
 .save-status--saved {
   color: #166534;
   background: #dcfce7;
+}
+
+.save-status--error {
+  color: #991b1b;
+  background: #fee2e2;
 }
 
 .last-saved-text {

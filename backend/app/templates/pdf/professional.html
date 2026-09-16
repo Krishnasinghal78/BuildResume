@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>{{ resume_title }}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Liberation Serif', Georgia, 'Times New Roman', serif;
+    font-size: 10.5pt;
+    line-height: 1.4;
+    color: #1a1a1a;
+    margin: 0;
+  }
+  .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; }
+  .header h1 { font-size: 20pt; margin: 0 0 4px; letter-spacing: 1px; }
+  .contact-line { font-size: 9pt; color: #333; }
+  .contact-line a { color: #333; text-decoration: none; }
+  .contact-line span.sep { margin: 0 6px; color: #999; }
+
+  .section { margin-top: 12px; }
+  .section h2 {
+    font-size: 11.5pt;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border-bottom: 1px solid #1a1a1a;
+    padding-bottom: 2px;
+    margin: 0 0 6px;
+  }
+  .entry { margin-bottom: 8px; }
+  .entry-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .entry-title { font-weight: bold; }
+  .entry-sub { font-style: italic; color: #444; font-size: 9.5pt; }
+  .entry-date { font-size: 9.5pt; color: #444; white-space: nowrap; }
+  .entry-desc { margin: 3px 0 0; }
+  ul.bullets { margin: 3px 0 0; padding-left: 16px; }
+  ul.bullets li { margin-bottom: 2px; }
+  .links-row { font-size: 9pt; margin-top: 2px; }
+  .links-row a { color: #1a1a1a; }
+  .skills-row { margin-bottom: 3px; }
+  .skills-row .label { font-weight: bold; }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>{{ full_name or resume_title }}</h1>
+    <div class="contact-line">
+      {%- set contact_items = [] -%}
+      {%- if email %}{% set _ = contact_items.append('<a href="mailto:' + email + '">' + email + '</a>') %}{% endif -%}
+      {%- if phone %}{% set _ = contact_items.append(phone) %}{% endif -%}
+      {%- if location %}{% set _ = contact_items.append(location) %}{% endif -%}
+      {%- if linkedin_url %}{% set _ = contact_items.append('<a href="' + linkedin_url + '">LinkedIn</a>') %}{% endif -%}
+      {%- if github_url %}{% set _ = contact_items.append('<a href="' + github_url + '">GitHub</a>') %}{% endif -%}
+      {%- if portfolio_url %}{% set _ = contact_items.append('<a href="' + portfolio_url + '">Portfolio</a>') %}{% endif -%}
+      {{ contact_items | join('<span class="sep">|</span>') | safe }}
+    </div>
+  </div>
+
+  {% if summary_html %}
+  <div class="section">
+    <h2>Professional Summary</h2>
+    <p>{{ summary_html | safe }}</p>
+  </div>
+  {% endif %}
+
+  {% if education %}
+  <div class="section">
+    <h2>Education</h2>
+    {% for e in education %}
+    <div class="entry">
+      <div class="entry-row">
+        <span class="entry-title">{{ e.degree }}</span>
+        <span class="entry-date">{{ e.start_date }}{% if e.start_date and e.end_date %} &ndash; {% endif %}{{ e.end_date }}</span>
+      </div>
+      <div class="entry-sub">{{ e.institution }}{% if e.location %} &middot; {{ e.location }}{% endif %}</div>
+      {% if e.grade %}<div>Grade: {{ e.grade }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if experience %}
+  <div class="section">
+    <h2>Experience</h2>
+    {% for job in experience %}
+    <div class="entry">
+      <div class="entry-row">
+        <span class="entry-title">{{ job.job_title }}{% if job.company %} &mdash; {{ job.company }}{% endif %}</span>
+        <span class="entry-date">{{ job.start_date }}{% if job.start_date and job.end_date %} &ndash; {% endif %}{{ job.end_date }}</span>
+      </div>
+      {% if job.location %}<div class="entry-sub">{{ job.location }}</div>{% endif %}
+      {% if job.description_html %}<div class="entry-desc">{{ job.description_html | safe }}</div>{% endif %}
+      {% if job.responsibilities_html %}
+      <ul class="bullets">
+        {% for r in job.responsibilities_html %}<li>{{ r | safe }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if projects %}
+  <div class="section">
+    <h2>Projects</h2>
+    {% for p in projects %}
+    <div class="entry">
+      <div class="entry-row">
+        <span class="entry-title">{{ p.name }}{% if p.tech_stack %} <span class="entry-sub">({{ p.tech_stack }})</span>{% endif %}</span>
+        <span class="entry-date">{{ p.start_date }}{% if p.start_date and p.end_date %} &ndash; {% endif %}{{ p.end_date }}</span>
+      </div>
+      {% if p.description_html %}<div class="entry-desc">{{ p.description_html | safe }}</div>{% endif %}
+      {% if p.bullets_html %}
+      <ul class="bullets">
+        {% for b in p.bullets_html %}<li>{{ b | safe }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if p.github_url or p.live_url %}
+      <div class="links-row">
+        {% if p.github_url %}<a href="{{ p.github_url }}">GitHub</a>{% endif %}
+        {% if p.github_url and p.live_url %} &nbsp;|&nbsp; {% endif %}
+        {% if p.live_url %}<a href="{{ p.live_url }}">Live Demo</a>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if skills %}
+  <div class="section">
+    <h2>Skills</h2>
+    {% for label, value in skills.items() %}
+    <div class="skills-row">
+      <span class="label">{{ label | title }}:</span>
+      {% if value is iterable and value is not string %}{{ value | join(', ') }}{% else %}{{ value }}{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if certifications %}
+  <div class="section">
+    <h2>Certifications</h2>
+    {% for c in certifications %}
+    <div class="entry">
+      <div class="entry-row">
+        <span class="entry-title">{{ c.name if c is mapping else c }}</span>
+        {% if c is mapping and c.issueDate %}<span class="entry-date">{{ c.issueDate }}</span>{% endif %}
+      </div>
+      {% if c is mapping and c.organization %}<div class="entry-sub">{{ c.organization }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if achievements %}
+  <div class="section">
+    <h2>Achievements</h2>
+    <ul class="bullets">
+      {% for a in achievements %}
+      <li><span class="entry-title">{{ a.title }}</span>{% if a.description_html %} &mdash; {{ a.description_html | safe }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if extracurricular %}
+  <div class="section">
+    <h2>Extracurricular Activities</h2>
+    {% for x in extracurricular %}
+    <div class="entry">
+      <span class="entry-title">{{ x.title }}</span>{% if x.organization %} <span class="entry-sub">({{ x.organization }})</span>{% endif %}
+      {% if x.description_html %}<div class="entry-desc">{{ x.description_html | safe }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</body>
+</html>

@@ -253,7 +253,7 @@ function renderFormattedText(text, segments) {
    `rawValue` is always plain text -- formatting comes entirely from
    currentResume.formatting[path], never from the text itself. */
 function rf(path, rawValue) {
-  var text = rawValue || '';
+  var text = stripHtmlToPlainText(rawValue || '');
   var html = renderFormattedText(text, getFieldSegments(path));
   return ' data-br-field="' + path + '" data-br-rich="1">' + html;
 }
@@ -1091,6 +1091,25 @@ function escHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+/* ---- Defensive plain-text sanitizer ----
+   Resume data must ALWAYS be plain text, never HTML -- this is what
+   heals any resume saved by the older, now-removed implementation
+   that stored raw HTML (<span style=...>, <b>, etc) directly inside
+   the text fields themselves. Strips only tags from our known
+   formatting vocabulary (so an incidental "<" in genuine content,
+   e.g. "score < 50", is left alone), repeating until nothing more
+   matches in case corruption had nested/duplicated across edits. */
+function stripHtmlToPlainText(str) {
+  if (!str) return '';
+  var s = String(str);
+  var prev;
+  do {
+    prev = s;
+    s = s.replace(/<\/?(b|strong|i|em|u|s|strike|span|a|br)\b[^>]*>/gi, '');
+  } while (s !== prev);
+  return s;
+}
+
 /* ---- localStorage helpers ---- */
 var TEMPLATE_STORAGE_KEY = "buildresume_selected_template";
 var DEFAULT_TEMPLATE_ID  = "ATS_CLASSIC";
@@ -1843,7 +1862,31 @@ const mockTemplates = {
 /* --- Page Navigation --- */
 let currentPage = "home";
 
+/* Pages that require a logged-in session. Everything else (login,
+   register, otp-verify) is public. */
+const PROTECTED_PAGES = ["home", "builder", "templates", "profile"];
+const AUTH_ONLY_PAGES = ["login", "register", "otp-verify"];
+
+/* Remembers where the user was actually trying to go, so a login
+   redirects back to it afterwards instead of always landing on Home. */
+let pendingRedirectPage = null;
+
 function navigateTo(pageName) {
+  // ---- Route protection ----
+  if (PROTECTED_PAGES.indexOf(pageName) !== -1 && !hasStoredSession()) {
+    pendingRedirectPage = pageName;
+    pageName = "login";
+  } else if (AUTH_ONLY_PAGES.indexOf(pageName) !== -1 && hasStoredSession() && pageName !== "otp-verify") {
+    // Already logged in and trying to visit login/register directly ->
+    // send them to Home instead. otp-verify is exempt: it's reached
+    // mid-flow, before verification completes the login/registration.
+    pageName = "home";
+  }
+
+  updateNavVisibility(PROTECTED_PAGES.indexOf(pageName) !== -1);
+  var decorEl = document.getElementById("authBackgroundDecor");
+  if (decorEl) decorEl.style.display = AUTH_ONLY_PAGES.indexOf(pageName) !== -1 ? "block" : "none";
+
   // Hide all pages
   document.querySelectorAll(".page").forEach(function (p) {
     p.style.display = "none";
@@ -1866,7 +1909,10 @@ function navigateTo(pageName) {
     home:      "BuildResume - My Resumes",
     builder:   "BuildResume - Resume Builder",
     templates: "BuildResume - Templates",
-    profile:   "BuildResume - My Profile"
+    profile:   "BuildResume - My Profile",
+    login:     "BuildResume - Log In",
+    register:  "BuildResume - Create Account",
+    "otp-verify": "BuildResume - Verify Code"
   };
   document.title = pageTitles[pageName] || "BuildResume";
 
@@ -1881,32 +1927,52 @@ function navigateTo(pageName) {
   document.getElementById("navbarNav").classList.remove("open");
 }
 
+/* Shows/hides the top nav bar entirely based on auth state -- there's
+   no reason an unauthenticated visitor should see Home/Builder/
+   Templates/Profile/Logout links at all. */
+function updateNavVisibility(isAuthenticated) {
+  var header = document.getElementById("appHeader");
+  if (header) header.style.display = isAuthenticated ? "" : "none";
+}
+
 /* --- Home Page --- */
-function renderHomePage() {
+async function renderHomePage() {
   var grid = document.getElementById('resumeGrid');
   if (!grid) return;
-  grid.innerHTML = '';
+  grid.innerHTML = '<div class="empty-state"><span>\u23F3</span>Loading your resumes...</div>';
 
-  var resumes = getAllResumes();
+  var resumes;
+  try {
+    resumes = await getResumes();
+  } catch (err) {
+    grid.innerHTML = '<div class="empty-state">'
+      + '<span>\u26A0\uFE0F</span>' + escHtml(describeResumeApiError(err, 'load'))
+      + '<br><button class="btn-secondary" onclick="renderHomePage()" style="margin-top:10px;">Retry</button>'
+      + '</div>';
+    return;
+  }
+
   if (!resumes.length) {
     grid.innerHTML = '<div class="empty-state"><span>\uD83D\uDCC4</span>'
       + 'No resumes yet.<br>Click &ldquo;+ Create New Resume&rdquo; to get started.</div>';
     return;
   }
 
+  grid.innerHTML = '';
   resumes.slice().reverse().forEach(function(resume) {
-    var tpl  = TemplateRegistry[resume.selectedTemplate];
-    var d    = new Date(resume.lastModifiedDate);
+    var selectedTemplateKey = (resume.resume_data && resume.resume_data.selectedTemplate) || '';
+    var tpl  = TemplateRegistry[selectedTemplateKey];
+    var d    = new Date(resume.updated_at);
     var card = document.createElement('div');
     card.className = 'resume-card';
     card.innerHTML =
-      '<div class="resume-card-title">\uD83D\uDCC4 ' + escHtml(resume.resumeName) + '</div>'
-      + '<div class="resume-card-meta">Template: ' + escHtml(tpl ? tpl.name : resume.selectedTemplate) + '</div>'
+      '<div class="resume-card-title">\uD83D\uDCC4 ' + escHtml(resume.title) + '</div>'
+      + '<div class="resume-card-meta">Template: ' + escHtml(tpl ? tpl.name : (selectedTemplateKey || 'Unknown')) + '</div>'
       + '<div class="resume-card-meta">Modified: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString() + '</div>'
       + '<div class="resume-card-actions">'
-      + '<button class="btn-edit" onclick="editResume(\'' + resume.resumeId + '\')">\u270F Edit</button>'
-      + '<button class="btn-duplicate" onclick="duplicateResume(\'' + resume.resumeId + '\')">\u29C9 Duplicate</button>'
-      + '<button class="btn-delete" onclick="confirmDeleteResume(\'' + resume.resumeId + '\',\'' + escHtml(resume.resumeName) + '\')">\uD83D\uDDD1 Delete</button>'
+      + '<button class="btn-edit" onclick="editResume(\'' + resume.id + '\')">\u270F Edit</button>'
+      + '<button class="btn-duplicate" onclick="duplicateResume(\'' + resume.id + '\')">\u29C9 Duplicate</button>'
+      + '<button class="btn-delete" onclick="confirmDeleteResume(\'' + resume.id + '\',\'' + escHtml(resume.title) + '\')">\uD83D\uDDD1 Delete</button>'
       + '</div>';
     grid.appendChild(card);
   });
@@ -1920,7 +1986,6 @@ function editResume(resumeId) {
 function confirmDeleteResume(resumeId, name) {
   if (confirm('Delete "' + name + '"? This cannot be undone.')) {
     deleteResume(resumeId);
-    showToast('Resume deleted.');
   }
 }
 
@@ -1989,6 +2054,21 @@ function closeLogoutModal() {
   document.getElementById("logoutModal").classList.remove("open");
 }
 
+async function performLogout() {
+  var confirmBtn = document.getElementById("confirmLogout");
+  var originalLabel = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = "Logging out...";
+
+  await logoutUser(); // always clears local tokens itself, even on failure
+
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = originalLabel;
+  closeLogoutModal();
+  showToast("Logged out successfully.", "success");
+  navigateTo("login");
+}
+
 /* --- Hamburger Menu --- */
 function initNavbar() {
   // Mount the reusable Brand component into the navbar slot
@@ -2013,7 +2093,9 @@ function initNavbar() {
 
   // Wire modal buttons
   document.getElementById("cancelLogout").addEventListener("click", closeLogoutModal);
-  document.getElementById("confirmLogout").addEventListener("click", closeLogoutModal);
+  document.getElementById("confirmLogout").addEventListener("click", function () {
+    performLogout();
+  });
 
   // Close modal on overlay click
   document.getElementById("logoutModal").addEventListener("click", function (e) {
@@ -2033,17 +2115,17 @@ function initNavbar() {
       nav.classList.remove("open");
     }
   });
-
-  // Start on home page
-  navigateTo("home");
 }
 
 /* =========================================================
    RESUME DATA MODEL & STORAGE
    ========================================================= */
 
-var STORAGE_KEYS = {
-  RESUMES:    'buildresume_resumes',
+/* Only holds a pointer (which resume is open in the builder right
+   now), never resume content -- all actual resume data lives in
+   Postgres and is only ever read/written via getResume()/
+   getResumes()/createResume()/updateResume()/deleteResumeApi(). */
+var RESUME_STORAGE_KEYS = {
   CURRENT_ID: 'buildresume_current_resume_id'
 };
 
@@ -2053,7 +2135,7 @@ function generateId() {
 
 function createEmptyResume(name) {
   return {
-    resumeId:         generateId(),
+    resumeId:         null, /* set for real once the first save/autosave creates the backend row */
     resumeName:       name || 'Untitled Resume',
     selectedTemplate: getSelectedTemplate(),
     createdDate:      new Date().toISOString(),
@@ -2097,78 +2179,195 @@ function createEmptyResume(name) {
   };
 }
 
-function getAllResumes() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.RESUMES) || '[]'); }
-  catch(e) { return []; }
+/* =========================================================
+   BACKEND <-> INTERNAL RESUME SHAPE CONVERSION
+   ========================================================= */
+
+var RESUME_CONTENT_KEYS = [
+  'personalInfo', 'summary', 'education', 'skills', 'projects',
+  'workExperience', 'achievements', 'certifications', 'languages', 'extracurricular'
+];
+
+function internalResumeToApiPayload(resume) {
+  var resume_data = {};
+  RESUME_CONTENT_KEYS.forEach(function (key) {
+    resume_data[key] = resume.data ? resume.data[key] : undefined;
+  });
+  resume_data.format           = resume.format;
+  resume_data.sectionOrder     = resume.sectionOrder;
+  resume_data.sections         = resume.sections;
+  resume_data.selectedTemplate = resume.selectedTemplate;
+
+  return {
+    title: resume.resumeName,
+    resume_data: resume_data,
+    formatting_data: resume.formatting || {}
+  };
 }
 
-function saveAllResumes(resumes) {
-  localStorage.setItem(STORAGE_KEYS.RESUMES, JSON.stringify(resumes));
+function apiResumeToInternal(apiResume) {
+  var rd = (apiResume && apiResume.resume_data) || {};
+  var defaults = createEmptyResume().data;
+  var data = {};
+  RESUME_CONTENT_KEYS.forEach(function (key) {
+    data[key] = (rd[key] !== undefined) ? rd[key] : defaults[key];
+  });
+
+  return {
+    resumeId:         apiResume.id,
+    resumeName:       apiResume.title || 'Untitled Resume',
+    selectedTemplate: rd.selectedTemplate || getSelectedTemplate(),
+    createdDate:      apiResume.created_at,
+    lastModifiedDate: apiResume.updated_at,
+    format:           rd.format || JSON.parse(JSON.stringify(DEFAULT_FORMAT)),
+    formatting:       apiResume.formatting_data || {},
+    sectionOrder:     (rd.sectionOrder && rd.sectionOrder.length) ? rd.sectionOrder : SECTION_DEFS.map(function(d){ return d.key; }),
+    sections:         rd.sections || createEmptyResume().sections,
+    data:             data
+  };
+}
+
+function describeResumeApiError(err, action) {
+  if (!err) return 'Something went wrong. Please try again.';
+  if (err.status === 0)   return 'Could not reach the server. Check your connection and try again.';
+  if (err.status === 401) return 'Your session has expired. Please log in again.';
+  if (err.status === 403) return 'You do not have permission to ' + action + ' this resume.';
+  if (err.status === 404) return 'This resume could not be found. It may have been deleted.';
+  if (err.status >= 500)  return 'The server ran into a problem while trying to ' + action + ' this resume. Please try again shortly.';
+  return err.message || ('Failed to ' + action + ' this resume.');
 }
 
 function getCurrentResumeId() {
-  return localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null;
+  return localStorage.getItem(RESUME_STORAGE_KEYS.CURRENT_ID) || null;
 }
 
 function setCurrentResumeId(id) {
-  localStorage.setItem(STORAGE_KEYS.CURRENT_ID, id);
+  localStorage.setItem(RESUME_STORAGE_KEYS.CURRENT_ID, id);
+}
+
+function clearCurrentResumeId() {
+  localStorage.removeItem(RESUME_STORAGE_KEYS.CURRENT_ID);
 }
 
 var currentResume = null;
 
-function loadResumeById(id) {
-  var resumes = getAllResumes();
-  var found = resumes.find(function(r){ return r.resumeId === id; });
-  if (!found) return null;
-  currentResume = JSON.parse(JSON.stringify(found));
-
-  /* Back-fill fields that didn't exist in resumes saved before this version */
-  if (!currentResume.format) {
-    currentResume.format = JSON.parse(JSON.stringify(DEFAULT_FORMAT));
+async function loadResumeById(id) {
+  try {
+    var apiResume = await getResume(id);
+    currentResume = apiResumeToInternal(apiResume);
+    migrateLegacyHtmlInData(currentResume);
+    return currentResume;
+  } catch (err) {
+    showToast(describeResumeApiError(err, 'open'), 'error');
+    return null;
   }
-  if (!currentResume.sectionOrder || !currentResume.sectionOrder.length) {
-    currentResume.sectionOrder = SECTION_DEFS.map(function(d){ return d.key; });
-  }
-  if (!currentResume.formatting) currentResume.formatting = {};
-  return currentResume;
 }
 
-function saveCurrentResume() {
-  if (!currentResume) return;
-  currentResume.lastModifiedDate = new Date().toISOString();
-  currentResume.selectedTemplate = getSelectedTemplate();
+function migrateLegacyHtmlInData(resume) {
+  var d = resume.data;
+  if (!d) return;
+  var touched = false;
 
-  var resumes = getAllResumes();
-  var idx = resumes.findIndex(function(r){ return r.resumeId === currentResume.resumeId; });
-  if (idx >= 0) { resumes[idx] = currentResume; } else { resumes.push(currentResume); }
-  saveAllResumes(resumes);
-  showSaveStatus('saved');
+  function clean(obj, key) {
+    if (!obj || obj[key] == null) return;
+    var before = obj[key];
+    var after  = stripHtmlToPlainText(before);
+    if (after !== before) { obj[key] = after; touched = true; }
+  }
+
+  if (d.summary) clean(d.summary, 'text');
+  (d.workExperience || []).forEach(function (w) {
+    clean(w, 'description');
+    (w.responsibilities || []).forEach(function (r) { clean(r, 'text'); });
+  });
+  (d.projects || []).forEach(function (p) {
+    clean(p, 'description');
+    (p.bullets || []).forEach(function (b) { clean(b, 'text'); });
+  });
+  (d.achievements || []).forEach(function (a) { clean(a, 'description'); });
+  (d.extracurricular || []).forEach(function (e) { clean(e, 'description'); });
+
+  if (touched) {
+    resume.formatting = {};
+    showToast('Cleaned up some corrupted formatting from an earlier version. Please re-apply any formatting.', 'info');
+  }
+}
+
+var _saveInProgress = false;
+
+async function saveCurrentResume() {
+  if (!currentResume) return;
+  if (_saveInProgress) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(saveCurrentResume, 400);
+    return;
+  }
+
+  _saveInProgress = true;
+  currentResume.selectedTemplate = getSelectedTemplate();
+  var payload = internalResumeToApiPayload(currentResume);
+
+  try {
+    var apiResume;
+    if (!currentResume.resumeId) {
+      apiResume = await createResume(payload);
+      currentResume.resumeId = apiResume.id;
+      setCurrentResumeId(apiResume.id);
+    } else {
+      apiResume = await updateResume(currentResume.resumeId, payload);
+    }
+    currentResume.createdDate      = apiResume.created_at;
+    currentResume.lastModifiedDate = apiResume.updated_at;
+    showSaveStatus('saved');
+  } catch (err) {
+    showSaveStatus('error');
+    showToast(describeResumeApiError(err, 'save'), 'error');
+  } finally {
+    _saveInProgress = false;
+  }
+
   updateBuilderToolbar();
 }
 
-function deleteResume(resumeId) {
-  var resumes = getAllResumes().filter(function(r){ return r.resumeId !== resumeId; });
-  saveAllResumes(resumes);
+async function deleteResume(resumeId) {
+  try {
+    await deleteResumeApi(resumeId);
+  } catch (err) {
+    showToast(describeResumeApiError(err, 'delete'), 'error');
+    return;
+  }
+
   if (getCurrentResumeId() === resumeId) {
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_ID);
+    clearCurrentResumeId();
     currentResume = null;
   }
+  showToast('Resume deleted.', 'success');
   renderHomePage();
 }
 
-function duplicateResume(resumeId) {
-  var resumes = getAllResumes();
-  var orig = resumes.find(function(r){ return r.resumeId === resumeId; });
-  if (!orig) return;
-  var copy = JSON.parse(JSON.stringify(orig));
-  copy.resumeId        = generateId();
-  copy.resumeName      = orig.resumeName + ' (Copy)';
-  copy.createdDate     = new Date().toISOString();
-  copy.lastModifiedDate= new Date().toISOString();
-  resumes.push(copy);
-  saveAllResumes(resumes);
-  renderHomePage();
-  showToast('Resume duplicated!');
+async function duplicateResume(resumeId) {
+  var original;
+  try {
+    original = await getResume(resumeId);
+  } catch (err) {
+    showToast(describeResumeApiError(err, 'duplicate'), 'error');
+    return;
+  }
+
+  var copyPayload = {
+    title: (original.title || 'Untitled Resume') + ' (Copy)',
+    template_id: original.template_id || null,
+    resume_data: original.resume_data || {},
+    formatting_data: original.formatting_data || {}
+  };
+
+  try {
+    await createResume(copyPayload);
+    showToast('Resume duplicated!', 'success');
+    renderHomePage();
+  } catch (err) {
+    showToast(describeResumeApiError(err, 'duplicate'), 'error');
+  }
 }
 
 /* =========================================================
@@ -2441,16 +2640,13 @@ function monthYearPair(label, mField, yField, mVal, yVal, id, updateFn, ongoingO
   var mOpts  = '<option value="">Month</option>' + months.map(function(m,i){
     return '<option value="' + (i+1) + '"' + (mVal == i+1 ? ' selected' : '') + '>' + m + '</option>';
   }).join('');
-  var startYear = 1900;
-var endYear = new Date().getFullYear() + 20;
-
-var yOpts = '<option value="">Year</option>';
-
-for (var y = startYear; y <= endYear; y++) {
-    yOpts += '<option value="' + y + '"' +
-             (yVal == y ? ' selected' : '') +
-             '>' + y + '</option>';
-}
+  var now  = new Date().getFullYear();
+  var YEAR_RANGE_START = 1950;
+  var YEAR_RANGE_END   = now + 20;
+  var yOpts = '<option value="">Year</option>' + Array.from({length: YEAR_RANGE_END - YEAR_RANGE_START + 1}, function(_, i){
+    var y = YEAR_RANGE_START + i;
+    return '<option value="' + y + '"' + (yVal == y ? ' selected' : '') + '>' + y + '</option>';
+  }).join('');
   return '<div class="field-wrap"><label>' + label + '</label>'
     + '<div class="inline-input">'
     + '<select onchange="' + updateFn + '(\'' + id + '\',\'' + mField + '\',this.value)">' + mOpts + '</select>'
@@ -2573,7 +2769,7 @@ function renderFormSection(key) {
    ========================================================= */
 
 function renderSummaryForm(container) {
-  var text = currentResume.data.summary.text || '';
+  var text = stripHtmlToPlainText(currentResume.data.summary.text || '');
   container.innerHTML = sectionHeader('\uD83D\uDCDD', 'Professional Summary', 'summary')
     + '<div class="fs-body">'
     + '<div class="field-wrap"><label>Summary <span class="fs-hint">(50\u2013300 words recommended)</span></label>'
@@ -2776,7 +2972,7 @@ function renderProjectCardHTML(p) {
     return '<div class="bullet-item">'
       + '<span class="bullet-dot">\u2022</span>'
       + '<input type="text" class="bullet-input" placeholder="Describe a contribution..." '
-      + 'value="' + escHtml(b.text || '') + '" '
+      + 'value="' + escHtml(stripHtmlToPlainText(b.text || '')) + '" '
       + 'oninput="updateProjectBullet(\'' + p.id + '\',\'' + b.id + '\',this.value)">'
       + '<button class="bullet-remove" onclick="removeProjectBullet(\'' + p.id + '\',\'' + b.id + '\')" title="Remove">\u00d7</button>'
       + '</div>';
@@ -2803,7 +2999,7 @@ function renderProjectCardHTML(p) {
     + ' onchange="toggleProjectOngoing(\'' + p.id + '\',this.checked)"> Currently Ongoing</label>'
     + '<div class="field-wrap" style="margin-top:8px;"><label>Project Description</label>'
     + '<textarea rows="2" placeholder="Brief overview of the project..." '
-    + 'oninput="updateProjectField(\'' + p.id + '\',\'description\',this.value)">' + escHtml(p.description || '') + '</textarea></div>'
+    + 'oninput="updateProjectField(\'' + p.id + '\',\'description\',this.value)">' + escHtml(stripHtmlToPlainText(p.description || '')) + '</textarea></div>'
     + '<div class="field-wrap" style="margin-top:8px;">'
     + '<label>Key Contributions <span class="fs-hint">(bullet points)</span></label>'
     + '<div class="bullet-editor"><div class="bullet-editor-list" id="proj-bullets-' + p.id + '">'
@@ -2928,7 +3124,7 @@ function renderWorkCardHTML(w) {
     return '<div class="bullet-item">'
       + '<span class="bullet-dot">\u2022</span>'
       + '<input type="text" class="bullet-input" placeholder="Describe a responsibility or achievement..." '
-      + 'value="' + escHtml(r.text || '') + '" '
+      + 'value="' + escHtml(stripHtmlToPlainText(r.text || '')) + '" '
       + 'oninput="updateWorkResp(\'' + w.id + '\',\'' + r.id + '\',this.value)">'
       + '<button class="bullet-remove" onclick="removeWorkResp(\'' + w.id + '\',\'' + r.id + '\')">\u00d7</button>'
       + '</div>';
@@ -3070,7 +3266,7 @@ function renderAchievementCardHTML(a) {
     + '</div>'
     + '<div class="field-wrap"><label>Description <span class="fs-hint">(optional)</span></label>'
     + '<textarea rows="2" placeholder="Describe the achievement..." '
-    + 'oninput="updateAchField(\'' + a.id + '\',\'description\',this.value)">' + escHtml(a.description || '') + '</textarea></div>'
+    + 'oninput="updateAchField(\'' + a.id + '\',\'description\',this.value)">' + escHtml(stripHtmlToPlainText(a.description || '')) + '</textarea></div>'
     + '</div>';
 }
 
@@ -3231,7 +3427,7 @@ function renderExtraCardHTML(e) {
     + entryField('Activity / Role', e.id, 'activity', e.activity, 'President, CS Club', 'updateExtraField')
     + '<div class="field-wrap"><label>Description <span class="fs-hint">(optional)</span></label>'
     + '<textarea rows="2" placeholder="Describe your role and contributions..." '
-    + 'oninput="updateExtraField(\'' + e.id + '\',\'description\',this.value)">' + escHtml(e.description || '') + '</textarea></div>'
+    + 'oninput="updateExtraField(\'' + e.id + '\',\'description\',this.value)">' + escHtml(stripHtmlToPlainText(e.description || '')) + '</textarea></div>'
     + '</div>';
 }
 
@@ -3715,6 +3911,9 @@ function showSaveStatus(status) {
   if (status === 'saving') {
     el.textContent = 'Saving...';
     el.className = 'save-status save-status--saving';
+  } else if (status === 'error') {
+    el.textContent = 'Save failed \u2013 retrying on next edit';
+    el.className = 'save-status save-status--error';
   } else {
     el.textContent = 'Saved \u2713';
     el.className = 'save-status save-status--saved';
@@ -3840,10 +4039,10 @@ function renderBuilderForm() {
   });
 }
 
-function initBuilder() {
+async function initBuilder() {
   var id = getCurrentResumeId();
   if (id) {
-    var loaded = loadResumeById(id);
+    var loaded = await loadResumeById(id);
     if (!loaded) { currentResume = null; openNewResumeModal(); return; }
   } else {
     currentResume = null;
@@ -3877,7 +4076,7 @@ var _resumeModalMode = 'create'; // 'create' | 'rename'
 
 function initiateNewResume() {
   currentResume = null;
-  localStorage.removeItem(STORAGE_KEYS.CURRENT_ID);
+  clearCurrentResumeId();
   navigateTo('builder');
 }
 
@@ -3918,7 +4117,7 @@ function closeNewResumeModal() {
   if (_resumeModalMode === 'create' && !currentResume) navigateTo('home');
 }
 
-function confirmResumeNameAction() {
+async function confirmResumeNameAction() {
   var input = document.getElementById('newResumeNameInput');
   var name  = input ? input.value.trim() : '';
   if (!name) {
@@ -3935,13 +4134,19 @@ function confirmResumeNameAction() {
     return;
   }
 
+  /* Lazy-creation: clicking "Create Resume" only opens the builder
+     in-memory (resumeId stays null). No backend row exists yet --
+     the first real edit's scheduleAutoSave() call is what triggers
+     saveCurrentResume() to POST and mint the server UUID. This is
+     what avoids abandoned-session junk rows for people who name a
+     resume and then navigate away without ever touching the form. */
   currentResume = createEmptyResume(name);
-  setCurrentResumeId(currentResume.resumeId);
-  saveCurrentResume();
+  clearCurrentResumeId();
   closeNewResumeModal();
   renderBuilderForm();
   initTemplateSwitcher();
   renderPreview();
+  updateBuilderToolbar();
 }
 
 /* =========================================================
@@ -4332,7 +4537,7 @@ function syncPreviewToData(preview) {
     var path = el.getAttribute('data-br-field');
     if (!path) return;
     var isRich  = el.getAttribute('data-br-rich') === '1';
-    var newText = (el.innerText || el.textContent || '');
+    var newText = stripHtmlToPlainText(el.innerText || el.textContent || '');
     if (!isRich) newText = newText.trim();
 
     var oldText = isRich
@@ -4664,12 +4869,169 @@ function initTemplateSwitcher() {
 }
 
 /* ---------- Init ---------- */
-function init() {
-  initNavbar();          // mounts brand, wires nav links, shows home page
+/* =========================================================
+   AUTH PAGES: Login / Register / OTP Verify
+   ========================================================= */
+
+/* Remembers which flow the OTP page is currently completing, set
+   right before navigating to it from either the login or register
+   form. There's only ever one such flow in progress at a time. */
+let otpContext = { purpose: null, email: null };
+
+function configureOtpPage(purpose, email) {
+  otpContext = { purpose: purpose, email: email };
+  var heading = document.getElementById("otpHeading");
+  var subheading = document.getElementById("otpSubheading");
+  if (purpose === "signup") {
+    heading.textContent = "Verify Your Email";
+    subheading.textContent = "Enter the 6-digit code we sent to " + email + " to complete registration.";
+  } else {
+    heading.textContent = "Verify Login";
+    subheading.textContent = "Enter the 6-digit code we sent to " + email + " to finish logging in.";
+  }
+  document.getElementById("otpCodeInput").value = "";
+}
+
+function setButtonBusy(button, busyLabel) {
+  button.dataset.originalLabel = button.dataset.originalLabel || button.textContent;
+  button.disabled = true;
+  button.textContent = busyLabel;
+}
+
+function clearButtonBusy(button) {
+  button.disabled = false;
+  button.textContent = button.dataset.originalLabel || button.textContent;
+}
+
+function initAuthPages() {
+  // ---- Login ----
+  document.getElementById("loginForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var email = document.getElementById("loginEmail").value.trim();
+    var password = document.getElementById("loginPassword").value;
+
+    if (!email || !password) {
+      showToast("Please enter your email and password.", "error");
+      return;
+    }
+
+    var btn = document.getElementById("loginSubmitBtn");
+    setButtonBusy(btn, "Logging in...");
+    try {
+      var resp = await loginUser(email, password);
+      configureOtpPage("login", email);
+      navigateTo("otp-verify");
+      showToast(resp.message || "OTP sent to your email.", "info");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      clearButtonBusy(btn);
+    }
+  });
+
+  document.getElementById("goToRegisterLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    navigateTo("register");
+  });
+
+  // ---- Register ----
+  document.getElementById("registerForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var email = document.getElementById("registerEmail").value.trim();
+    var username = document.getElementById("registerUsername").value.trim();
+    var password = document.getElementById("registerPassword").value;
+
+    if (!email || !username || !password) {
+      showToast("Please fill in every field.", "error");
+      return;
+    }
+    if (username.length < 3) {
+      showToast("Username must be at least 3 characters.", "error");
+      return;
+    }
+    if (password.length < 8) {
+      showToast("Password must be at least 8 characters.", "error");
+      return;
+    }
+
+    var btn = document.getElementById("registerSubmitBtn");
+    setButtonBusy(btn, "Creating account...");
+    try {
+      var resp = await registerUser(email, username, password);
+      configureOtpPage("signup", email);
+      navigateTo("otp-verify");
+      showToast(resp.message || "OTP sent to your email.", "info");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      clearButtonBusy(btn);
+    }
+  });
+
+  document.getElementById("goToLoginLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    navigateTo("login");
+  });
+
+  // ---- OTP Verify (shared by both signup and login) ----
+  document.getElementById("otpForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var code = document.getElementById("otpCodeInput").value.trim();
+
+    if (!/^\d{6}$/.test(code)) {
+      showToast("Enter the 6-digit code.", "error");
+      return;
+    }
+    if (!otpContext.email || !otpContext.purpose) {
+      showToast("Something went wrong -- please start again.", "error");
+      navigateTo("login");
+      return;
+    }
+
+    var btn = document.getElementById("otpSubmitBtn");
+    setButtonBusy(btn, "Verifying...");
+    try {
+      if (otpContext.purpose === "signup") {
+        await verifyRegisterOtp(otpContext.email, code);
+        showToast("Account created successfully. Please log in.", "success");
+        document.getElementById("loginEmail").value = otpContext.email;
+        otpContext = { purpose: null, email: null };
+        navigateTo("login");
+      } else {
+        await verifyLoginOtp(otpContext.email, code);
+        showToast("Welcome back!", "success");
+        var destination = pendingRedirectPage || "home";
+        pendingRedirectPage = null;
+        otpContext = { purpose: null, email: null };
+        navigateTo(destination);
+      }
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      clearButtonBusy(btn);
+    }
+  });
+
+  document.getElementById("otpBackLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    navigateTo(otpContext.purpose === "signup" ? "register" : "login");
+  });
+}
+
+async function init() {
+  initNavbar();          // mounts brand, wires nav links, hamburger (no longer auto-navigates)
+  initAuthPages();       // wires login/register/otp-verify forms
   initPanelResizing();
   initPanelControls();
   clampPanelsToContainer();
   updateControlStates();
+
+  // Resolve whether there's a usable session BEFORE deciding the
+  // first page to show -- this is what lets a returning user with an
+  // expired-but-refreshable access token land on Home instead of
+  // being incorrectly bounced to Login.
+  var loggedIn = await ensureValidSession();
+  navigateTo(loggedIn ? "home" : "login");
 }
 
 document.addEventListener("DOMContentLoaded", init);

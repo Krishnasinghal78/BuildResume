@@ -6,6 +6,7 @@ Nothing here talks HTTP; app/api/v1/auth.py is responsible for
 translating these exceptions into HTTP responses.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -15,7 +16,9 @@ from app.core.config import settings
 from app.core.security import generate_otp_code, hash_otp_code, verify_otp_code
 from app.models.otp_code import OtpPurpose
 from app.repositories.otp_repository import OtpRepository
-from app.services.email_service import get_email_service
+from app.services.email_service import EmailDeliveryError, get_email_service
+
+logger = logging.getLogger("buildresume.otp")
 
 
 class OtpInvalidError(Exception):
@@ -50,6 +53,14 @@ class OtpService:
         code. `payload` carries whatever data is needed to complete the
         flow once verified (e.g. pending signup username/hashed_password)
         without creating any real record before verification succeeds.
+
+        Raises:
+            EmailDeliveryError: the OTP was generated and stored
+                successfully, but the email itself could not be sent
+                (SMTP auth failure, network error, etc). The OTP row
+                still exists in the database when this happens -- see
+                app/services/email_service.py for what "sending"
+                means for the currently-configured EMAIL_PROVIDER.
         """
         code = generate_otp_code()
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
@@ -62,7 +73,14 @@ class OtpService:
             payload=payload,
         )
 
-        self.email_service.send_otp_email(to_email=email, otp_code=code, purpose=purpose.value)
+        try:
+            self.email_service.send_otp_email(to_email=email, otp_code=code, purpose=purpose.value)
+        except EmailDeliveryError:
+            logger.error(
+                "OTP was generated and stored for %s (purpose=%s) but email delivery failed.",
+                email, purpose.value,
+            )
+            raise
 
     def verify_otp(self, email: str, code: str, purpose: OtpPurpose) -> dict[str, Any] | None:
         """

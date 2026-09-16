@@ -56,6 +56,23 @@ class Settings(BaseSettings):
     # ---- OTP (email verification / login OTP) ----
     OTP_EXPIRE_MINUTES: int = 10
 
+    # ---- Email delivery ----
+    # "mock" (default) logs the OTP to the console instead of sending a
+    # real email -- exactly today's behavior, and the fastest possible
+    # rollback if SMTP ever misbehaves in production: set this back to
+    # "mock" and restart, no code change required.
+    # "gmail_smtp" sends real email via Gmail's SMTP servers using the
+    # settings below.
+    EMAIL_PROVIDER: str = "mock"
+
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "BuildResume"
+    SMTP_USE_TLS: bool = True
+
     # ---- CORS ----
     # Kept as a raw string (not List[str]) because pydantic-settings
     # attempts to JSON-decode any List-typed field read from a .env

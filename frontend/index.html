@@ -11,7 +11,7 @@
 <body>
 
   <!-- ===== Top Header ===== -->
-  <header class="app-header">
+  <header class="app-header" id="appHeader">
   <div class="navbar">
     <div class="navbar-brand" id="navbarBrand">
       <!-- Brand component: logo + wordmark. Rendered here statically;
@@ -30,9 +30,115 @@
   </div>
 </header>
 
+  <!-- ===================== PAGE: LOGIN ===================== -->
+  <!-- Shared animated background decor for all auth pages (login/register/
+       otp-verify) -- purely decorative, toggled on/off in script.js
+       alongside which page is active. Kept subtle/professional: low
+       opacity resume-document icons + soft particles, not flashy. -->
+  <div id="authBackgroundDecor" aria-hidden="true">
+    <div class="auth-decor-icon" style="top:12%; left:8%;  width:46px; height:46px; animation-duration:9s;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15h6M9 9h2"/></svg>
+    </div>
+    <div class="auth-decor-icon" style="top:70%; left:12%; width:34px; height:34px; animation-duration:11s; animation-delay:1.5s;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15h6M9 9h2"/></svg>
+    </div>
+    <div class="auth-decor-icon" style="top:20%; left:85%; width:38px; height:38px; animation-duration:10s; animation-delay:0.8s;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15h6M9 9h2"/></svg>
+    </div>
+    <div class="auth-decor-icon" style="top:80%; left:80%; width:50px; height:50px; animation-duration:13s; animation-delay:2.2s;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15h6M9 9h2"/></svg>
+    </div>
+    <div class="auth-decor-icon" style="top:45%; left:50%; width:30px; height:30px; animation-duration:8s; animation-delay:3s;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15h6M9 9h2"/></svg>
+    </div>
+
+    <div class="auth-decor-particle" style="top:15%; left:25%; width:6px;  height:6px;  animation-duration:6s;"></div>
+    <div class="auth-decor-particle" style="top:60%; left:35%; width:4px;  height:4px;  animation-duration:7s;  animation-delay:1s;"></div>
+    <div class="auth-decor-particle" style="top:30%; left:65%; width:5px;  height:5px;  animation-duration:5.5s; animation-delay:2s;"></div>
+    <div class="auth-decor-particle" style="top:85%; left:55%; width:7px;  height:7px;  animation-duration:8s;  animation-delay:0.5s;"></div>
+    <div class="auth-decor-particle" style="top:50%; left:90%; width:4px;  height:4px;  animation-duration:6.5s; animation-delay:1.8s;"></div>
+    <div class="auth-decor-particle" style="top:8%;  left:55%; width:5px;  height:5px;  animation-duration:7.5s; animation-delay:2.5s;"></div>
+  </div>
+
+  <div class="page auth-page" id="page-login" style="display:none;">
+    <div class="auth-card">
+      <div class="auth-logo">BuildResume</div>
+      <h2 class="page-heading">Log In</h2>
+      <p class="page-subheading">Welcome back. Enter your credentials to continue.</p>
+
+      <form id="loginForm" novalidate>
+        <div class="profile-field">
+          <label>Email</label>
+          <input type="email" id="loginEmail" autocomplete="username" required>
+        </div>
+        <div class="profile-field">
+          <label>Password</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-primary auth-submit-btn" id="loginSubmitBtn">Log In</button>
+      </form>
+
+      <p class="auth-switch-line">
+        Don't have an account? <a href="#" id="goToRegisterLink">Register</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ===================== PAGE: REGISTER ===================== -->
+  <div class="page auth-page" id="page-register" style="display:none;">
+    <div class="auth-card">
+      <div class="auth-logo">BuildResume</div>
+      <h2 class="page-heading">Create Account</h2>
+      <p class="page-subheading">Start building your resume in minutes.</p>
+
+      <form id="registerForm" novalidate>
+        <div class="profile-field">
+          <label>Email</label>
+          <input type="email" id="registerEmail" autocomplete="username" required>
+        </div>
+        <div class="profile-field">
+          <label>Username</label>
+          <input type="text" id="registerUsername" autocomplete="username" required minlength="3" maxlength="50">
+        </div>
+        <div class="profile-field">
+          <label>Password</label>
+          <input type="password" id="registerPassword" autocomplete="new-password" required minlength="8">
+        </div>
+        <button type="submit" class="btn-primary auth-submit-btn" id="registerSubmitBtn">Create Account</button>
+      </form>
+
+      <p class="auth-switch-line">
+        Already have an account? <a href="#" id="goToLoginLink">Log In</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ===================== PAGE: OTP VERIFICATION ===================== -->
+  <div class="page auth-page" id="page-otp-verify" style="display:none;">
+    <div class="auth-card">
+      <div class="auth-logo">BuildResume</div>
+      <h2 class="page-heading" id="otpHeading">Verify Your Email</h2>
+      <p class="page-subheading" id="otpSubheading">Enter the 6-digit code we sent to your email.</p>
+
+      <form id="otpForm" novalidate>
+        <div class="profile-field">
+          <label>Verification Code</label>
+          <input type="text" id="otpCodeInput" inputmode="numeric" pattern="[0-9]{6}"
+                 maxlength="6" autocomplete="one-time-code" required
+                 style="letter-spacing:6px; font-size:20px; text-align:center;">
+        </div>
+        <button type="submit" class="btn-primary auth-submit-btn" id="otpSubmitBtn">Verify</button>
+      </form>
+
+      <p class="auth-switch-line">
+        <a href="#" id="otpBackLink">&larr; Back</a>
+      </p>
+    </div>
+  </div>
+
   <!-- ===== Main Layout: 3 Columns ===== -->
   <!-- ===================== PAGE: HOME ===================== -->
-<div class="page" id="page-home">
+<div class="page" id="page-home" style="display:none;">
   <div class="page-content">
 
     <div class="dashboard-hero">
@@ -433,6 +539,7 @@
   </div>
 </div>
 
+<script src="api.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
