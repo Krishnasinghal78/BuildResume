@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # ---- OTP (email verification / login OTP) ----
     OTP_EXPIRE_MINUTES: int = 10
 
+    # ---- AI (Gemini) ----
+    GEMINI_API_KEY: str = ""
+
     # ---- Email delivery ----
     # "mock" (default) logs the OTP to the console instead of sending a
     # real email -- exactly today's behavior, and the fastest possible

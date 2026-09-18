@@ -354,3 +354,39 @@ function updateResume(id, payload) {
 function deleteResumeApi(id) {
   return apiFetch("/resumes/" + id, { method: "DELETE" });
 }
+
+/* =========================================================
+   AI assistant endpoint function.
+   ========================================================= */
+
+/**
+ * POST /ai/chat -- sends a single user message (and, optionally, the
+ * id of the resume currently open in the Builder) to the backend's
+ * Gemini-backed AI assistant and returns its text response.
+ *
+ * Goes through apiFetch() like every other authenticated call here,
+ * so it automatically gets the "Authorization: Bearer <token>"
+ * header and the silent 401-refresh-and-retry behavior -- no
+ * separate auth handling needed. The Gemini API key itself is never
+ * seen by this file or any other frontend code; it lives only in the
+ * backend's environment.
+ *
+ * Only the resume's id is ever sent -- never the resume content
+ * itself. The backend looks the resume up server-side (the same
+ * ownership-enforced path GET /resumes/{id} uses) and builds Gemini
+ * context from that, so a tampered/forged id can't leak someone
+ * else's resume through this endpoint.
+ *
+ * @param {string} message
+ * @param {string|null} [resumeId] - id of the resume currently open
+ *   in the Builder, or null/omitted if none (e.g. before first save).
+ * @returns {Promise<string>} the assistant's response text (unwrapped
+ *   from the backend's {response: "..."} shape).
+ */
+async function sendAiChatMessage(message, resumeId) {
+  const data = await apiFetch("/ai/chat", {
+    method: "POST",
+    body: JSON.stringify({ message: message, resume_id: resumeId }),
+  });
+  return data.response;
+}

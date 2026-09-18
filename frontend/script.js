@@ -4323,24 +4323,101 @@ function exportDocxPlaceholder() {
 }
 
 /* =========================================================
-   AI ASSISTANT PANEL (placeholder — unchanged)
+   AI ASSISTANT PANEL
    ========================================================= */
+
+/* Cycled while a request is pending, to make the thinking bubble
+   feel alive rather than a static "Loading...". */
+var AI_THINKING_MESSAGES = [
+  "Thinking...",
+  "Reviewing your resume...",
+  "Analyzing your request...",
+  "Crafting a useful suggestion...",
+  "Almost there..."
+];
 
 function sendAIMessage() {
   var input = document.getElementById("aiInput");
   var message = input.value.trim();
   if (message === "") return;
+
+  /* Loading-state guard: disabling the input for the duration of the
+     request, combined with clearing its value immediately below,
+     means a second Enter/click while a request is still in flight
+     finds an empty, disabled input and no-ops (message === "" short-
+     circuits above) -- no new UI elements or extra state needed. */
+  input.disabled = true;
+
   var chat = document.getElementById("aiChat");
   var userMsg = document.createElement("div");
   userMsg.className = "ai-message user";
   userMsg.textContent = message;
   chat.appendChild(userMsg);
-  var aiMsg = document.createElement("div");
-  aiMsg.className = "ai-message";
-  aiMsg.textContent = "\uD83E\uDD16 AI integration coming soon! This is just a UI preview.";
-  chat.appendChild(aiMsg);
   input.value = "";
   chat.scrollTop = chat.scrollHeight;
+
+  /* Temporary "thinking" bubble: same .ai-message visual language as
+     a real AI response, plus a dedicated modifier class for the
+     dot animation. Its text cycles through AI_THINKING_MESSAGES on
+     an interval for as long as the real request is in flight -- no
+     artificial delay is introduced anywhere in this function; the
+     bubble is removed the instant the Promise below settles. */
+  var thinkingMsg = document.createElement("div");
+  thinkingMsg.className = "ai-message ai-thinking";
+  thinkingMsg.innerHTML =
+    '<span class="ai-thinking-icon">\uD83E\uDD16</span>' +
+    '<span class="ai-thinking-text">' + AI_THINKING_MESSAGES[0] + '</span>' +
+    '<span class="ai-thinking-dots"><span></span><span></span><span></span></span>';
+  chat.appendChild(thinkingMsg);
+  chat.scrollTop = chat.scrollHeight;
+
+  var thinkingTextEl = thinkingMsg.querySelector(".ai-thinking-text");
+  var thinkingIndex = 0;
+  var thinkingInterval = setInterval(function () {
+    thinkingIndex = (thinkingIndex + 1) % AI_THINKING_MESSAGES.length;
+    thinkingTextEl.textContent = AI_THINKING_MESSAGES[thinkingIndex];
+  }, 1200);
+
+  /* Single cleanup path for both the success and error branches below
+     -- guarantees the interval is always cleared and the bubble is
+     always removed exactly once, however the request settles. */
+  function removeThinkingBubble() {
+    clearInterval(thinkingInterval);
+    if (thinkingMsg.parentNode) thinkingMsg.parentNode.removeChild(thinkingMsg);
+  }
+
+  /* currentResume.resumeId is null before the first save (lazy-
+     creation design -- see saveCurrentResume()); sendAiChatMessage()
+     treats a falsy value as "no resume context" and sends resume_id:
+     null, which the backend already treats as "answer with no
+     resume context" (unchanged behavior). */
+  var resumeId = (currentResume && currentResume.resumeId) || null;
+
+  sendAiChatMessage(message, resumeId)
+    .then(function (responseText) {
+      removeThinkingBubble();
+      var aiMsg = document.createElement("div");
+      aiMsg.className = "ai-message";
+      /* Gemini's response is Markdown. marked() parses it to HTML,
+         then DOMPurify.sanitize() strips anything unsafe before it
+         ever touches the DOM -- raw Gemini text is never assigned to
+         innerHTML directly. */
+      aiMsg.innerHTML = DOMPurify.sanitize(marked.parse(responseText));
+      chat.appendChild(aiMsg);
+    })
+    .catch(function (err) {
+      removeThinkingBubble();
+      var aiMsg = document.createElement("div");
+      aiMsg.className = "ai-message";
+      aiMsg.textContent = "\uD83E\uDD16 Sorry, I couldn't get a response right now. Please try again.";
+      chat.appendChild(aiMsg);
+      showToast((err && err.message) || "AI assistant request failed.", "error");
+    })
+    .finally(function () {
+      input.disabled = false;
+      chat.scrollTop = chat.scrollHeight;
+      input.focus();
+    });
 }
 
 /* ---------- Draggable Panel Resizing (LeetCode-style) ---------- */
